@@ -1,0 +1,6 @@
+# Allow all well-behaved crawlers. This file contains no absolute URLs on
+# purpose: the Sitemap directive is appended at build time by
+# scripts/generate-sitemap.mjs once a production siteUrl is configured in
+# src/site.config.json.
+User-agent: *
+Allow: /

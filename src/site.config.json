@@ -1,0 +1,7 @@
+{
+  "_comment": "Single source of truth for site identity and SEO. Set siteUrl to your final production origin (e.g. https://example.com) WITHOUT a trailing slash once the domain is confirmed. While siteUrl is empty, canonical tags, og:url and the sitemap are intentionally NOT emitted, so no placeholder domain can leak into production. Changing name/tagline/description here updates the whole site including meta tags.",
+  "name": "Zyprilo",
+  "tagline": "Test your speed. Beat your best.",
+  "description": "Play 14 free speed and reflex games in your browser \u2014 typing tests, CPS, reaction time, memory, aim and more. No downloads, no accounts, results stored on your device.",
+  "siteUrl": ""
+}
