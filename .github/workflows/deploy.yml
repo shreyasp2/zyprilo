@@ -39,12 +39,20 @@ jobs:
 
       - name: Compute asset base path
         id: base
+        # A CNAME file in the repository declares a custom domain (e.g.
+        # zyprilo.tech). Custom domains serve the site from the domain ROOT,
+        # so assets must build with base '/'. Without a custom domain, project
+        # pages serve from /<repo>/ instead.
         run: |
-          REPO="${{ github.event.repository.name }}"
-          if [[ "$REPO" == *.github.io ]]; then
+          if [[ -f public/CNAME || -f CNAME ]]; then
             echo "path=/" >> "$GITHUB_OUTPUT"
           else
-            echo "path=/$REPO/" >> "$GITHUB_OUTPUT"
+            REPO="${{ github.event.repository.name }}"
+            if [[ "$REPO" == *.github.io ]]; then
+              echo "path=/" >> "$GITHUB_OUTPUT"
+            else
+              echo "path=/$REPO/" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Build
