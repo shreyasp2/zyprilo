@@ -7,7 +7,7 @@ import type { GameResult } from '../../lib/results'
 import { createResult, saveResult } from '../../lib/results'
 import { elapsedMs, formatClock, now } from '../../lib/time'
 import { generateWords } from '../typing/words'
-import { parseTypingValue, rewindToWord, scoreAppendedChars } from '../typing/typingInput'
+import { emptyCursor, parseTypingValue, rewindToWord, scoreAppendedChars } from '../typing/typingInput'
 
 type Phase = 'idle' | 'running' | 'done'
 /** 'free' keeps the original untimed 15-word flow. */
@@ -52,10 +52,15 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
   const deadlineRef = useRef<number | null>(null)
   const keystrokesRef = useRef(0)
   const correctKeystrokesRef = useRef(0)
-  // Cursor into the hidden input's accumulating value: everything before it is
-  // already parsed into submitted words. Never rewritten mid-composition, so
-  // mobile IMEs stay in sync (see typingInput.ts).
-  const consumedRef = useRef(0)
+  // Parse cursor into the hidden input's accumulating value: everything before
+  // it is already parsed into submitted words. The cursor records the consumed
+  // text, so IME composing-region rewrites below it are detected and healed
+  // (see typingInput.ts). The input's DOM value itself is never reset while
+  // typing, which is what keeps mobile keyboards in sync.
+  const cursorRef = useRef(emptyCursor())
+  // True between compositionstart and compositionend: Android/iOS soft
+  // keyboards compose words (the space included) through this window.
+  const composingRef = useRef(false)
   const savedRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const activeWordRef = useRef<HTMLSpanElement | null>(null)
@@ -81,7 +86,7 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
     deadlineRef.current = null
     keystrokesRef.current = 0
     correctKeystrokesRef.current = 0
-    consumedRef.current = 0
+    cursorRef.current = emptyCursor()
     if (inputRef.current) inputRef.current.value = ''
     setWords(generateWords(isTimed(nextMode) ? 200 : FREE_WORDS))
     setWordIndex(0)
@@ -189,11 +194,13 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
 
   const handleInput = (raw: string) => {
     if (isDone()) return
-    // Parse forward from the consumed cursor; the input's value is never
-    // trimmed, collapsed, or reset, so separators (including consecutive and
-    // non-breaking ones from on-screen keyboards) all reach this parser.
-    const parsed = parseTypingValue(raw, consumedRef.current)
-    consumedRef.current = parsed.consumed
+    // parseTypingValue verifies the consumed prefix on every event and rebuilds
+    // the cursor when an IME composing region rewrote it (GBoard keeps the
+    // submitted word + separator inside its region), so this survives every
+    // mobile keyboard flow. The input's value is never trimmed, collapsed, or
+    // reset here — trailing and consecutive separators all reach the parser.
+    const parsed = parseTypingValue(raw, cursorRef.current)
+    cursorRef.current = parsed.cursor
 
     for (const word of parsed.submissions) {
       beginRunIfNeeded()
@@ -227,8 +234,11 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
       e.key === 'Backspace' &&
       typedRef.current === '' &&
       finishedRef.current.length > 0 &&
-      phaseRef.current !== 'done'
+      phaseRef.current !== 'done' &&
+      !composingRef.current
     ) {
+      // Never rewrite the DOM value while a composition is active (requirement
+      // for mobile IMEs); the parser's desync recovery handles that case.
       e.preventDefault()
       const prev = finishedRef.current[finishedRef.current.length - 1]
       finishedRef.current = finishedRef.current.slice(0, -1)
@@ -241,9 +251,9 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
       // only the separator after it is dropped so it becomes active again.
       const el = inputRef.current
       if (el) {
-        const rewound = rewindToWord(el.value, prev.typed)
+        const rewound = rewindToWord(el.value, prev.typed, cursorRef.current)
         el.value = rewound.value
-        consumedRef.current = rewound.consumed
+        cursorRef.current = rewound.cursor
       }
     }
   }
@@ -391,6 +401,16 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
               // Writing value={typed} back after every word resets the DOM
               // mid-composition and desyncs mobile IMEs (spaces get lost).
               onChange={(e) => handleInput(e.target.value)}
+              onCompositionStart={() => {
+                composingRef.current = true
+              }}
+              // handleInput is idempotent here: it re-parses the committed
+              // value in case the final commit differs from the last
+              // composition update (some keyboards swap text at commit).
+              onCompositionEnd={(e) => {
+                composingRef.current = false
+                handleInput(e.currentTarget.value)
+              }}
               onKeyDown={handleKeyDown}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}

@@ -41,13 +41,15 @@ function mount(element: ReturnType<typeof createElement>): HTMLInputElement {
  * Simulate an input event the way a mobile keyboard delivers it: the full
  * current value is set natively, then an `input` event bubbles to React.
  */
+function setNativeValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, value)
+}
+
+/** Simulate an input event the way a mobile keyboard delivers it. */
 function typeValue(input: HTMLInputElement, value: string) {
   act(() => {
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      'value',
-    )?.set
-    setter?.call(input, value)
+    setNativeValue(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
@@ -206,6 +208,55 @@ describe('TypingGame word-boundary backspace', () => {
     typeValue(input, `${THE_WORD}X`)
     expect(charClasses().at(-1)).toContain('extra')
   })
+
+  it('never rewrites the input value while a composition is active', () => {
+    const input = mount(createElement(TypingGame, {}))
+    typeValue(input, `${THE_WORD} `)
+    act(() => {
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }))
+    })
+    pressKey(input, 'Backspace')
+    expect(input.value).toBe(`${THE_WORD} `)
+  })
+})
+
+describe('TypingGame GBoard composition lifecycle', () => {
+  it('accepts a word, a space, and the next word through region-replacing composition updates', () => {
+    const input = mount(createElement(TypingGame, {}))
+    // Word 1: GBoard composes the word and its space as one region.
+    gboardType(input, { word: THE_WORD, composing: true })
+    expect(container.querySelector('.tword')?.className).toContain('done-ok')
+    expect(input.value).toBe(`${THE_WORD} `)
+    expect(caretInfo()).toEqual({ pos: 0, after: false })
+    // Word 2: the next letter replaces GBoard's composing region, so the DOM
+    // value collapses to a single character. The game must accept it as the
+    // first letter of the next word — this is the reported Android failure.
+    gboardType(input, { word: THE_WORD, composing: true, resumeFromRegion: true })
+    expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(2)
+    expect(input.value).toBe(`${THE_WORD} `)
+    // Word 3: the game keeps accepting input without any restart.
+    gboardType(input, { word: THE_WORD, composing: true, resumeFromRegion: true })
+    expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(3)
+    expect(caretInfo()).toEqual({ pos: 0, after: false })
+  })
+
+  it('accepts typing when the keyboard ends composition before the space', () => {
+    const input = mount(createElement(TypingGame, {}))
+    gboardType(input, { word: THE_WORD, composing: false })
+    expect(container.querySelector('.tword')?.className).toContain('done-ok')
+    gboardType(input, { word: THE_WORD, composing: false })
+    expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(2)
+    expect(input.value).toBe(`${THE_WORD} ${THE_WORD} `)
+  })
+
+  it('keeps the live error total sane through composition rewrites', () => {
+    const input = mount(createElement(TypingGame, {}))
+    gboardType(input, { word: THE_WORD, composing: true })
+    // Region replacement must not double-count the rewritten word's chars.
+    expect(hudValue('Errors')).toBe('0')
+    gboardType(input, { word: THE_WORD, composing: true, resumeFromRegion: true })
+    expect(hudValue('Errors')).toBe('0')
+  })
 })
 
 describe('TypingGame restart', () => {
@@ -257,4 +308,65 @@ describe('TypingAccuracyGame', () => {
     expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(1)
     expect(input.value).toBe(`${THE_WORD}\u00A0`)
   })
+
+  it('accepts continuous GBoard composition typing across word boundaries', () => {
+    const input = mount(createElement(TypingAccuracyGame, {}))
+    // GBoard keeps "word + space" inside its composing region; the next
+    // letter's update replaces the whole region, collapsing the DOM value.
+    gboardType(input, { word: THE_WORD, composing: true })
+    expect(container.querySelector('.tword')?.className).toContain('done-ok')
+    expect(input.value).toBe(`${THE_WORD} `)
+    // The next letter replaces the composing region: value collapses to "x".
+    gboardType(input, { word: THE_WORD, composing: true, resumeFromRegion: true })
+    expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(2)
+    expect(input.value).toBe(`${THE_WORD} `)
+    // A third word still types and submits — the game never stops accepting input.
+    gboardType(input, { word: THE_WORD, composing: true, resumeFromRegion: true })
+    expect(container.querySelectorAll('.tword.done-ok')).toHaveLength(3)
+    expect(caretInfo().pos).toBe(0)
+  })
 })
+
+/**
+ * Simulate one word typed through Android GBoard's composition lifecycle.
+ *
+ * `composing` models GBoard keeping the word AND its trailing space inside
+ * the composing region. `resumeFromRegion` models the region replacement: the
+ * first letter of the next word rewrites the DOM value down to that letter,
+ * destroying everything typed before it.
+ */
+function gboardType(
+  input: HTMLInputElement,
+  options: { word: string; composing: boolean; resumeFromRegion?: boolean },
+) {
+  const { word, composing, resumeFromRegion = false } = options
+  act(() => {
+    if (resumeFromRegion) {
+      // The composing region is replaced by the first letter of the next
+      // word: the DOM value collapses to a single character.
+      setNativeValue(input, word[0])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      for (let i = 1; i < word.length; i++) {
+        setNativeValue(input, word.slice(0, i + 1))
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    } else {
+      // A fresh composition appends to whatever the field already holds.
+      const base = input.value
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }))
+      for (let i = 0; i < word.length; i++) {
+        setNativeValue(input, base + word.slice(0, i + 1))
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }
+    if (composing) {
+      // Space inserted while the composition is still active.
+      setNativeValue(input, `${input.value} `)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    } else {
+      input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: word }))
+      setNativeValue(input, `${input.value} `)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+  })
+}
