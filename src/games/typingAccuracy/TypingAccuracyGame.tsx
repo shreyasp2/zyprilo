@@ -7,6 +7,7 @@ import type { GameResult } from '../../lib/results'
 import { createResult, saveResult } from '../../lib/results'
 import { elapsedMs, formatClock, now } from '../../lib/time'
 import { generateWords } from '../typing/words'
+import { parseTypingValue, rewindToWord, scoreAppendedChars } from '../typing/typingInput'
 
 type Phase = 'idle' | 'running' | 'done'
 /** 'free' keeps the original untimed 15-word flow. */
@@ -51,6 +52,10 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
   const deadlineRef = useRef<number | null>(null)
   const keystrokesRef = useRef(0)
   const correctKeystrokesRef = useRef(0)
+  // Cursor into the hidden input's accumulating value: everything before it is
+  // already parsed into submitted words. Never rewritten mid-composition, so
+  // mobile IMEs stay in sync (see typingInput.ts).
+  const consumedRef = useRef(0)
   const savedRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const activeWordRef = useRef<HTMLSpanElement | null>(null)
@@ -76,6 +81,8 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
     deadlineRef.current = null
     keystrokesRef.current = 0
     correctKeystrokesRef.current = 0
+    consumedRef.current = 0
+    if (inputRef.current) inputRef.current.value = ''
     setWords(generateWords(isTimed(nextMode) ? 200 : FREE_WORDS))
     setWordIndex(0)
     setTyped('')
@@ -153,10 +160,9 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
 
   const scoreAppended = (before: string, after: string) => {
     const target = words[wordIndexRef.current] ?? ''
-    for (let i = before.length; i < after.length; i++) {
-      keystrokesRef.current++
-      if (i < target.length && after[i] === target[i]) correctKeystrokesRef.current++
-    }
+    const delta = scoreAppendedChars(before, after, target)
+    keystrokesRef.current += delta.keystrokes
+    correctKeystrokesRef.current += delta.correct
     setKeystrokes(keystrokesRef.current)
     setCorrectKeystrokes(correctKeystrokesRef.current)
   }
@@ -183,26 +189,23 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
 
   const handleInput = (raw: string) => {
     if (isDone()) return
-    let value = raw
+    // Parse forward from the consumed cursor; the input's value is never
+    // trimmed, collapsed, or reset, so separators (including consecutive and
+    // non-breaking ones from on-screen keyboards) all reach this parser.
+    const parsed = parseTypingValue(raw, consumedRef.current)
+    consumedRef.current = parsed.consumed
 
-    // Space(s) submit the current word; a space with nothing typed is ignored.
-    while (value.includes(' ')) {
-      const spaceAt = value.indexOf(' ')
-      const word = value.slice(0, spaceAt)
-      if (word.length > 0) {
-        beginRunIfNeeded()
-        // Score only chars not already scored while typing (handles pastes).
-        scoreAppended(typedRef.current, word)
-        submitWord(word)
-        if (isDone()) return
-      }
-      value = value.slice(spaceAt + 1)
+    for (const word of parsed.submissions) {
+      beginRunIfNeeded()
+      // Score only chars not already scored while typing (handles pastes).
+      scoreAppended(typedRef.current, word)
+      submitWord(word)
+      if (isDone()) return
     }
 
-    if (value === typedRef.current) return
-
     const target = words[wordIndexRef.current] ?? ''
-    const capped = value.slice(0, target.length + 10)
+    const capped = parsed.activeTyped.slice(0, target.length + 10)
+    if (capped === typedRef.current) return
     if (capped.length > typedRef.current.length) {
       beginRunIfNeeded()
       scoreAppended(typedRef.current, capped)
@@ -212,6 +215,14 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Nothing wraps the input in a form; keep it that way so Enter/Space can
+      // never submit anything. Spaces in particular must reach the input so
+      // on-screen keyboards insert them and onChange turns them into word
+      // submissions (preventDefault here would break mobile text entry).
+      e.preventDefault()
+      return
+    }
     if (
       e.key === 'Backspace' &&
       typedRef.current === '' &&
@@ -226,6 +237,14 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
       setWordIndex(wordIndexRef.current)
       typedRef.current = prev.typed
       setTyped(prev.typed)
+      // Rewind the buffer: the previous word is still in the input verbatim,
+      // only the separator after it is dropped so it becomes active again.
+      const el = inputRef.current
+      if (el) {
+        const rewound = rewindToWord(el.value, prev.typed)
+        el.value = rewound.value
+        consumedRef.current = rewound.consumed
+      }
     }
   }
 
@@ -250,25 +269,35 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
   }
 
   const currentWord = words[wordIndex] ?? ''
+  const extraCount = Math.max(0, typed.length - currentWord.length)
+  const totalChars = currentWord.length + extraCount
+  // The caret lives inside the char it sits against so it advances with every
+  // keystroke: just before the next expected char, or just after the last
+  // char once the word is fully typed (extras included).
+  const caretBefore = typed.length < currentWord.length ? typed.length : -1
+  const caretAfter = caretBefore < 0 && totalChars > 0 ? totalChars - 1 : -1
   const chars: React.ReactNode[] = []
-  for (let i = 0; i < currentWord.length; i++) {
-    const typedChar = typed[i]
-    const state =
-      typedChar === undefined ? 'pending' : typedChar === currentWord[i] ? 'correct' : 'incorrect'
+  for (let i = 0; i < totalChars; i++) {
+    const inWord = i < currentWord.length
+    const state = !inWord
+      ? 'extra'
+      : typed[i] === undefined
+        ? 'pending'
+        : typed[i] === currentWord[i]
+          ? 'correct'
+          : 'incorrect'
     chars.push(
-      <span className={`tchar ${state}`} key={`c${i}`}>
-        {currentWord[i]}
+      <span className={`tchar ${state}`} key={inWord ? `c${i}` : `x${i}`}>
+        {inWord ? currentWord[i] : typed[i]}
+        {i === caretBefore && <span className="tcaret" aria-hidden="true" />}
+        {i === caretAfter && <span className="tcaret tcaret-after" aria-hidden="true" />}
       </span>,
     )
   }
-  for (let i = currentWord.length; i < typed.length; i++) {
-    chars.push(
-      <span className="tchar extra" key={`x${i}`}>
-        {typed[i]}
-      </span>,
-    )
+  // Degenerate empty-word fallback: keep the caret visible inside the word box.
+  if (totalChars === 0) {
+    chars.push(<span className="tcaret" key="caret" aria-hidden="true" />)
   }
-  chars.splice(Math.min(typed.length, chars.length), 0, <span className="tcaret" key="caret" />)
 
   const timed = isTimed(mode)
 
@@ -357,14 +386,17 @@ export default function TypingAccuracyGame({ dailyConfig }: GameProps) {
             <input
               ref={inputRef}
               className="typing-input"
-              value={typed}
+              // Uncontrolled on purpose: the input accumulates everything the
+              // keyboard inserts and handleInput parses it via typingInput.ts.
+              // Writing value={typed} back after every word resets the DOM
+              // mid-composition and desyncs mobile IMEs (spaces get lost).
               onChange={(e) => handleInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               autoComplete="off"
               autoCorrect="off"
-              autoCapitalize="off"
+              autoCapitalize="none"
               spellCheck={false}
               inputMode="text"
               aria-label="Type the displayed words here"

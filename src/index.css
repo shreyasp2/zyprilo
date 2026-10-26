@@ -1032,6 +1032,22 @@ body {
   animation: caret-blink 1.05s steps(1) infinite;
 }
 
+/* The caret renders inside the char it sits against (TypingGame), so anchor
+   the bar to the text middle instead of the word-box insets above. Height is
+   the word box's 2.1 line-height minus its 2 × 0.18em insets. */
+.tchar > .tcaret {
+  top: 50%;
+  bottom: auto;
+  height: 1.74em;
+  transform: translateY(-50%);
+}
+
+/* Word fully typed (extras included): caret sits just after the last char. */
+.tchar > .tcaret-after {
+  left: auto;
+  right: -2px;
+}
+
 @keyframes caret-blink {
   50% {
     opacity: 0;
