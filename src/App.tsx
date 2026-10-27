@@ -3,9 +3,15 @@ import { Zap } from 'lucide-react'
 import Home from './components/Home'
 import GameScreen from './components/GameScreen'
 import { goHome, useRoute } from './router'
+import { initProgressionListener } from './lib/progression'
 
 export default function App() {
   const route = useRoute()
+
+  // XP/achievement evaluation listens for saved results (installed once).
+  useEffect(() => {
+    initProgressionListener()
+  }, [])
 
   // Hash navigation swaps the page content while the window keeps its old
   // scroll offset; the browser clamps that offset to the new (shorter) page,
@@ -45,7 +51,7 @@ export default function App() {
         <GameScreen key={route.gameId} gameId={route.gameId} daily={route.daily} />
       )}
       <footer className="site-footer">
-        Zyprilo — fourteen free speed &amp; reflex tests, no accounts, results stored only in your
+        Zyprilo — seventeen free speed &amp; reflex tests, no accounts, results stored only in your
         browser.
       </footer>
     </>

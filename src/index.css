@@ -1823,3 +1823,448 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Sudoku Infinite ---------- */
+
+.sudoku-topline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.sudoku-level {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent, #22d3ee);
+}
+
+.sudoku-clues {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+.sudoku-arena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.sudoku-board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  width: min(100%, 432px);
+  aspect-ratio: 1;
+  border: 2px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-raise);
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.sudoku-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: clamp(0.9rem, 2.6vw, 1.2rem);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sudoku-cell.block-left {
+  border-left: 1.5px solid var(--border-strong);
+}
+
+.sudoku-cell.block-top {
+  border-top: 1.5px solid var(--border-strong);
+}
+
+.sudoku-cell.given {
+  color: var(--text);
+  font-weight: 700;
+  cursor: default;
+}
+
+.sudoku-cell:not(.given):hover {
+  background: var(--surface);
+}
+
+.sudoku-cell.peer {
+  background: var(--surface);
+}
+
+.sudoku-cell.selected {
+  background: rgba(34, 211, 238, 0.16);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sudoku-cell.same {
+  color: var(--accent);
+}
+
+.sudoku-cell.wrong span {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.sudoku-notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  font-size: clamp(0.42rem, 1.1vw, 0.58rem);
+  line-height: 1.15;
+  color: var(--text-faint);
+}
+
+.sudoku-notes i {
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sudoku-pad {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+  width: min(100%, 432px);
+}
+
+.sudoku-num {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  padding: 0.55rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sudoku-num:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sudoku-num:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sudoku-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.sudoku-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sudoku-tool:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.sudoku-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- Word Search Infinite ---------- */
+
+.ws-wordlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 0.4rem;
+}
+
+.ws-word {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.ws-word.found {
+  color: var(--good);
+  border-color: var(--good);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
+.ws-arena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.ws-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ws-size, 10), 1fr);
+  width: min(100%, 480px);
+  aspect-ratio: 1;
+  gap: 2px;
+  background: var(--bg-raise);
+  border: 2px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 6px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ws-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: clamp(0.6rem, 2.2vw, 1.05rem);
+  color: var(--text);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.ws-cell.selecting {
+  background: rgba(34, 211, 238, 0.22);
+  outline: 1px solid var(--accent);
+}
+
+.ws-cell.found {
+  background: rgba(74, 222, 128, 0.2);
+  color: var(--good);
+  font-weight: 700;
+}
+
+.ws-cell.hint {
+  background: rgba(250, 204, 21, 0.25);
+  outline: 1.5px solid #facc15;
+  animation: ws-hint-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ws-hint-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ---------- Maze Infinite ---------- */
+
+.maze-arena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.maze-grid {
+  display: grid;
+  width: min(100%, 560px);
+  gap: 0;
+  background: var(--bg-raise);
+  border: 2px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.maze-cell {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--bg);
+  border-radius: 1px;
+}
+
+.maze-cell.start {
+  background: rgba(74, 222, 128, 0.28);
+}
+
+.maze-cell.exit {
+  background: rgba(250, 204, 21, 0.35);
+}
+
+.maze-cell.player {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow, rgba(34, 211, 238, 0.4));
+  z-index: 1;
+}
+
+.maze-cell.open-n {
+  border-top: none;
+}
+
+.maze-cell.open-e {
+  border-right: none;
+}
+
+.maze-cell.open-s {
+  border-bottom: none;
+}
+
+.maze-cell.open-w {
+  border-left: none;
+}
+
+.maze-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  gap: 8px;
+  justify-content: center;
+}
+
+.maze-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.maze-btn:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.maze-restart {
+  grid-column: 1 / -1;
+  justify-content: center;
+}
+
+/* ---------- Progression ---------- */
+
+.progress-panel {
+  margin-bottom: 1.4rem;
+}
+
+.progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.progress-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.progress-xp {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: 0.7rem 0 0.45rem;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #818cf8);
+  border-radius: 999px;
+  transition: width 0.4s ease-out;
+}
+
+.progress-next {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+}
+
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+
+.achievement {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.achievement.unlocked {
+  border-color: rgba(250, 204, 21, 0.4);
+}
+
+.achievement-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.achievement.unlocked .achievement-icon {
+  color: #facc15;
+}
+
+.achievement-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.achievement-text strong {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.achievement:not(.unlocked) .achievement-text strong {
+  color: var(--text-faint);
+}
+
+.achievement-text em {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}

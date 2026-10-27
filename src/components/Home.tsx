@@ -11,6 +11,7 @@ import {
   localDateKey,
 } from '../lib/daily'
 import { loadResults, personalBest, RESULT_EVENT } from '../lib/results'
+import ProgressPanel from './ProgressPanel'
 
 export default function Home() {
   // Homepage metadata; game screens set their own via GameScreen.
@@ -152,6 +153,7 @@ export default function Home() {
         </section>
       )}
 
+      <ProgressPanel />
       <h2
         style={{
           fontSize: '0.78rem',

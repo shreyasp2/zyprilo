@@ -22,6 +22,9 @@ import SequenceMemoryGame from '../games/sequenceMemory/SequenceMemoryGame'
 import ColorReactionGame from '../games/colorReaction/ColorReactionGame'
 import WordUnscrambleGame from '../games/wordUnscramble/WordUnscrambleGame'
 import TypingAccuracyGame from '../games/typingAccuracy/TypingAccuracyGame'
+import SudokuGame from '../games/sudoku/SudokuGame'
+import WordSearchGame from '../games/wordSearch/WordSearchGame'
+import MazeGame from '../games/maze/MazeGame'
 
 export interface GameProps {
   /** Present when the run was entered as the official daily attempt. */
@@ -43,6 +46,9 @@ const GAME_COMPONENTS: Record<GameId, ComponentType<GameProps>> = {
   'color-reaction': ColorReactionGame,
   'word-unscramble': WordUnscrambleGame,
   'typing-accuracy': TypingAccuracyGame,
+  sudoku: SudokuGame,
+  'word-search': WordSearchGame,
+  maze: MazeGame,
 }
 
 /**

@@ -41,7 +41,7 @@ export function hashString(str: string): number {
   return h >>> 0
 }
 
-/** Deterministically picks one of the 14 games for the given date. */
+/** Deterministically picks one of the games for the given date. */
 export function dailyGameId(dateKey: string, version = DAILY_VERSION): GameId {
   return GAMES[hashString(`${dateKey}:${version}`) % GAMES.length].id
 }
@@ -57,6 +57,9 @@ const CONFIG_POOLS: Partial<Record<GameId, { durations?: number[]; difficulties?
   'number-memory': { difficulties: ['normal', 'hard'] },
   'sequence-memory': { grids: [3, 4, 5, 6] },
   'color-reaction': { durations: [15, 30, 60], difficulties: ['easy', 'medium', 'hard'] },
+  sudoku: { difficulties: ['easy', 'medium', 'hard'] },
+  'word-search': { difficulties: ['easy', 'medium', 'hard'] },
+  maze: { difficulties: ['easy', 'medium', 'hard'] },
 }
 
 /**

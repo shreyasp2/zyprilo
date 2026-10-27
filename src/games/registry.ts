@@ -5,12 +5,15 @@ import {
   Keyboard,
   LayoutGrid,
   ListOrdered,
+  Map,
   MousePointerClick,
   MoveVertical,
   Palette,
+  Search,
   Shuffle,
   Space,
   SpellCheck,
+  Table,
   Target,
   Zap,
   type LucideIcon,
@@ -32,6 +35,9 @@ export type GameId =
   | 'color-reaction'
   | 'word-unscramble'
   | 'typing-accuracy'
+  | 'sudoku'
+  | 'word-search'
+  | 'maze'
 
 export interface GameMeta {
   id: GameId
@@ -254,6 +260,51 @@ export const GAMES: GameMeta[] = [
     accent: '#10b981',
     icon: SpellCheck,
     better: 'higher',
+  },
+  {
+    id: 'sudoku',
+    name: 'Sudoku Infinite',
+    tagline: 'Endless 9×9 logic',
+    description:
+      'Classic 9×9 Sudoku with exactly one solution per puzzle. Levels tighten the clue count forever — notes, hints, undo and a mistake counter included.',
+    howTo: [
+      'Tap a cell, then tap a number on the pad (or press 1–9 on your keyboard).',
+      'Notes mode marks pencil candidates; erase clears a cell, Undo steps back, Hint fills a cell.',
+      'Wrong entries turn red and count as mistakes. Finish the grid for your time, then continue to a harder level.',
+    ],
+    accent: '#f97316',
+    icon: Table,
+    better: 'lower',
+  },
+  {
+    id: 'word-search',
+    name: 'Word Search Infinite',
+    tagline: 'Themed grids, endless levels',
+    description:
+      'A classic word worksheet with a twist: themed packs, growing grids and more directions every few levels. Drag across letters to mark the hidden words.',
+    howTo: [
+      'Drag across letters (any straight direction, forwards or backwards at higher levels) to mark a word.',
+      'Found words highlight in the grid and check off in the list. Hints reveal the start of a hidden word.',
+      'Levels grow the grid and word count. Clear every word for your time, then continue to a bigger puzzle.',
+    ],
+    accent: '#34d399',
+    icon: Search,
+    better: 'lower',
+  },
+  {
+    id: 'maze',
+    name: 'Maze Infinite',
+    tagline: 'Escape ever-larger labyrinths',
+    description:
+      'Procedurally generated mazes with a guaranteed path from start to exit. Levels grow the labyrinth and stretch the optimal route — how fast can you escape?',
+    howTo: [
+      'Move with the arrow keys or WASD on desktop, or tap the direction pad on mobile.',
+      'Every maze is solvable — the HUD shows the optimal move count to compare against.',
+      'Reach the exit flag for your time, then continue into a larger maze.',
+    ],
+    accent: '#60a5fa',
+    icon: Map,
+    better: 'lower',
   },
 ]
 
