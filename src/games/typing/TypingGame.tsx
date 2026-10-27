@@ -8,7 +8,12 @@ import type { GameResult } from '../../lib/results'
 import { createResult, saveResult } from '../../lib/results'
 import { elapsedMs, formatClock, now } from '../../lib/time'
 import { generateWords } from './words'
-import { parseTypingValue, rewindToWord, scoreAppendedChars, emptyCursor } from './typingInput'
+import {
+  devTrace,
+  scoreAppendedChars,
+  TypingInputMachine,
+  type TypingAction,
+} from './typingInput'
 
 type Phase = 'idle' | 'running' | 'done'
 type Mode = 15 | 30 | 60 | 120
@@ -61,15 +66,11 @@ export default function TypingGame({ dailyConfig }: GameProps) {
   const finishedRef = useRef<FinishedWord[]>([])
   const keystrokesRef = useRef(0)
   const correctKeystrokesRef = useRef(0)
-  // Parse cursor into the hidden input's accumulating value: everything before
-  // it is already parsed into submitted words. The cursor records the consumed
-  // text, so IME composing-region rewrites below it are detected and healed
-  // (see typingInput.ts). The input's DOM value itself is never reset while
-  // typing, which is what keeps mobile keyboards in sync.
-  const cursorRef = useRef(emptyCursor())
-  // True between compositionstart and compositionend: Android/iOS soft
-  // keyboards compose words (the space included) through this window.
-  const composingRef = useRef(false)
+  // Input state machine: turns browser/IME events (InputEvent.data, inputType,
+  // composition boundaries) into submit/change actions. The DOM value is
+  // treated as write-only IME workspace — GBoard rewrites it arbitrarily, so
+  // it is never parsed to decide what the user typed.
+  const machine = useMemo(() => new TypingInputMachine(), [])
   const suddenRef = useRef(sudden)
   const savedRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -95,7 +96,7 @@ export default function TypingGame({ dailyConfig }: GameProps) {
     setKeystrokes(0)
     correctKeystrokesRef.current = 0
     setCorrectKeystrokes(0)
-    cursorRef.current = emptyCursor()
+    machine.reset('')
     if (inputRef.current) inputRef.current.value = ''
     startedAtRef.current = null
     setStartedAt(null)
@@ -198,41 +199,80 @@ export default function TypingGame({ dailyConfig }: GameProps) {
     }
   }
 
-  const handleInput = (raw: string) => {
+  /** Un-submit the last word and make it active again (Backspace at the boundary). */
+  const restorePreviousWord = () => {
+    const prev = finishedRef.current[finishedRef.current.length - 1]
+    finishedRef.current = finishedRef.current.slice(0, -1)
+    setFinished(finishedRef.current)
+    wordIndexRef.current -= 1
+    setWordIndex(wordIndexRef.current)
+    typedRef.current = prev.typed
+    setTyped(prev.typed)
+    // Drop the separator(s) after the restored word so the keyboard's own
+    // model of the field matches, then restore the machine's active word.
+    const el = inputRef.current
+    let value = ''
+    if (el) {
+      value = el.value
+      while (value.length > 0 && (value.endsWith(' ') || value.endsWith('\u00A0'))) {
+        value = value.slice(0, -1)
+      }
+      el.value = value
+    }
+    machine.restoreWord(prev.typed, value)
+  }
+
+  const applyActions = (actions: TypingAction[]) => {
+    for (const action of actions) {
+      if (action.type === 'submit') {
+        beginRunIfNeeded()
+        // Letters were scored as they were appended; chars beyond the display
+        // cap are scored here (parity with the original implementation).
+        scoreAppended(typedRef.current, action.word)
+        submitWord(action.word)
+        if (isDone()) return
+      } else if (action.type === 'boundaryDelete') {
+        if (finishedRef.current.length > 0 && !isDone()) restorePreviousWord()
+      } else if (action.type === 'change') {
+        const target = words[wordIndexRef.current] ?? ''
+        const capped = machine.activeWord.slice(0, target.length + 10)
+        if (capped === typedRef.current) continue
+        if (capped.length > typedRef.current.length) beginRunIfNeeded()
+        scoreAppended(typedRef.current, capped)
+        if (isDone()) return
+        typedRef.current = capped
+        setTyped(capped)
+      }
+    }
+  }
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isDone()) return
-    // parseTypingValue verifies the consumed prefix on every event and rebuilds
-    // the cursor when an IME composing region rewrote it (GBoard keeps the
-    // submitted word + separator inside its region), so this survives every
-    // mobile keyboard flow. The input's value is never trimmed, collapsed, or
-    // reset here — trailing and consecutive separators all reach the parser.
-    const parsed = parseTypingValue(raw, cursorRef.current)
-    cursorRef.current = parsed.cursor
-
-    for (const word of parsed.submissions) {
-      beginRunIfNeeded()
-      // Score only chars not already scored while typing (handles pastes).
-      scoreAppended(typedRef.current, word)
-      submitWord(word)
-      if (isDone()) return
+    const native = e.nativeEvent as InputEvent
+    const evt = {
+      data: native.data ?? null,
+      inputType: native.inputType,
+      value: e.currentTarget.value,
     }
-
-    const target = words[wordIndexRef.current] ?? ''
-    const capped = parsed.activeTyped.slice(0, target.length + 10)
-    if (capped === typedRef.current) return
-    if (capped.length > typedRef.current.length) {
-      beginRunIfNeeded()
-      scoreAppended(typedRef.current, capped)
-      if (isDone()) return
-    }
-    typedRef.current = capped
-    setTyped(capped)
+    const actions = machine.handleInput(evt)
+    devTrace({
+      game: 'typing',
+      kind: 'input',
+      inputType: evt.inputType ?? null,
+      data: evt.data,
+      valueLen: evt.value.length,
+      actions,
+      wordIndex: wordIndexRef.current,
+      active: machine.activeWord,
+    })
+    applyActions(actions)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       // Nothing wraps the input in a form; keep it that way so Enter/Space can
       // never submit anything. Spaces in particular must reach the input so
-      // on-screen keyboards insert them and onChange turns them into word
+      // on-screen keyboards insert them and the machine turns them into word
       // submissions (preventDefault here would break mobile text entry).
       e.preventDefault()
       return
@@ -242,26 +282,12 @@ export default function TypingGame({ dailyConfig }: GameProps) {
       typedRef.current === '' &&
       finishedRef.current.length > 0 &&
       !isDone() &&
-      !composingRef.current
+      !machine.isComposing
     ) {
-      // Never rewrite the DOM value while a composition is active (requirement
-      // for mobile IMEs); the parser's desync recovery handles that case.
+      // Hardware-keyboard path. Soft keyboards never send a keydown for their
+      // backspace key; that case arrives as a boundaryDelete action instead.
       e.preventDefault()
-      const prev = finishedRef.current[finishedRef.current.length - 1]
-      finishedRef.current = finishedRef.current.slice(0, -1)
-      setFinished(finishedRef.current)
-      wordIndexRef.current -= 1
-      setWordIndex(wordIndexRef.current)
-      typedRef.current = prev.typed
-      setTyped(prev.typed)
-      // Rewind the buffer: the previous word is still in the input verbatim,
-      // only the separator after it is dropped so it becomes active again.
-      const el = inputRef.current
-      if (el) {
-        const rewound = rewindToWord(el.value, prev.typed, cursorRef.current)
-        el.value = rewound.value
-        cursorRef.current = rewound.cursor
-      }
+      restorePreviousWord()
     }
   }
 
@@ -451,20 +477,27 @@ export default function TypingGame({ dailyConfig }: GameProps) {
             <input
               ref={inputRef}
               className="typing-input"
-              // Uncontrolled on purpose: the input accumulates everything the
-              // keyboard inserts and handleInput parses it via typingInput.ts.
-              // Writing value={typed} back after every word resets the DOM
-              // mid-composition and desyncs mobile IMEs (spaces get lost).
-              onChange={(e) => handleInput(e.target.value)}
+              // Uncontrolled on purpose: the field is the keyboard's own
+              // workspace and is never reset or rewritten while typing. Input
+              // is interpreted by TypingInputMachine from per-event data, not
+              // from the field's value.
+              onChange={handleInput}
               onCompositionStart={() => {
-                composingRef.current = true
+                machine.compositionStart()
               }}
-              // handleInput is idempotent here: it re-parses the committed
-              // value in case the final commit differs from the last
-              // composition update (some keyboards swap text at commit).
               onCompositionEnd={(e) => {
-                composingRef.current = false
-                handleInput(e.currentTarget.value)
+                // Idempotent: if the final commit matches the last composition
+                // update, the machine emits no actions.
+                const actions = machine.compositionEnd(e.data ?? null)
+                devTrace({
+                  game: 'typing',
+                  kind: 'compositionend',
+                  data: e.data ?? null,
+                  actions,
+                  wordIndex: wordIndexRef.current,
+                  active: machine.activeWord,
+                })
+                applyActions(actions)
               }}
               onKeyDown={handleKeyDown}
               onFocus={() => setFocused(true)}
